@@ -1,6 +1,8 @@
 const api = window.cheatykitty;
 const $ = (id) => document.getElementById(id);
 
+api.onOpacity((opacity) => document.documentElement.style.setProperty("--overlay-opacity", String(opacity)));
+
 function setState(state) {
   const view = window.CheatyKittyViewModel.toViewModel(state);
   document.body.dataset.state = state.kind;

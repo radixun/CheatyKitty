@@ -27,13 +27,16 @@
 
       <section class="settings-section model-section">
         <span class="eyebrow">Model</span>
-        <fieldset id="modelSelector" class="model-selector" role="radiogroup" aria-labelledby="modelSelectorLegend">
-          <legend id="modelSelectorLegend">Choose one model and reasoning profile</legend>
+        <fieldset id="modelSelector" class="model-selector" aria-labelledby="modelSelectorLegend">
+          <legend id="modelSelectorLegend">Model and reasoning</legend>
           <div class="model-options">
-            <label class="model-option"><input type="radio" name="modelMode" value="gpt-5.6-luna" aria-label="Default — 5.6 Luna · Medium" checked /><span><strong>Default — 5.6 Luna</strong><small>Medium · recommended</small></span></label>
-            <label class="model-option"><input type="radio" name="modelMode" value="gpt-5.6-sol" aria-label="5.6 Sol · Medium" /><span><strong>5.6 Sol</strong><small>Medium</small></span></label>
-            <label class="model-option"><input type="radio" name="modelMode" value="gpt-5.3-codex-spark" aria-label="5.3 Codex Spark · Medium" /><span><strong>5.3 Codex Spark</strong><small>Medium</small></span></label>
+            <div class="field-group"><label for="modelId">Model ID</label><input id="modelId" list="modelSuggestions" autocomplete="off" spellcheck="false" aria-describedby="modelCatalogStatus" /><datalist id="modelSuggestions"></datalist></div>
+            <div class="field-group"><label for="reasoningEffort">Reasoning effort</label><input id="reasoningEffort" list="reasoningSuggestions" autocomplete="off" spellcheck="false" /><datalist id="reasoningSuggestions"></datalist></div>
           </div>
+          <label class="fast-option" for="fastMode"><input id="fastMode" type="checkbox" aria-describedby="fastHelp" />FAST</label>
+          <p id="fastHelp" class="helper">Faster processing where supported. May consume more usage.</p>
+          <p id="modelCatalogStatus" class="helper" role="status">Loading models from Codex CLI…</p>
+          <button id="refreshModels" class="secondary" type="button">Refresh models</button>
         </fieldset>
       </section>
 

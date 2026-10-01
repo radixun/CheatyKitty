@@ -15,7 +15,9 @@ const states = {
 };
 
 contextBridge.exposeInMainWorld("cheatykitty", {
-  getSettings: async () => ({ codexPath: "", timeoutSeconds: 90, captureMode: "display", model: "gpt-5.6-luna", reasoningEffort: "medium", autoIntervalSeconds: 7, overlayOpacity: .82, interactionMode: "auto", manualShortcut: "CommandOrControl+Shift+Space", resultLayout: "question-answer" }),
+  getSettings: async () => ({ codexPath: "", timeoutSeconds: 90, captureMode: "display", model: "gpt-5.6-luna", reasoningEffort: "medium", fastMode: false, autoIntervalSeconds: 7, overlayOpacity: .82, interactionMode: "auto", manualShortcut: "CommandOrControl+Shift+Space", resultLayout: "question-answer" }),
+  onOpacity: (callback) => callback(1),
+  listModels: async () => [{ model: "gpt-5.6-luna", displayName: "GPT-5.6 Luna", reasoningEfforts: [{ effort: "medium", description: "Balanced" }, { effort: "high", description: "Deeper reasoning" }], inputModalities: ["text", "image"], serviceTiers: [{ id: "priority", name: "Fast", description: "1.5x speed, increased usage" }] }],
   saveSettings: async (settings) => settings,
   previewOpacity: async () => {}, openSettings: () => {}, closeSettings: () => {}, quit: () => {}, setHitRegions: () => {}, clearHitRegions: () => {},
   validateShortcut: async (shortcut) => ({ ok: true, accelerator: shortcut }),

@@ -2,6 +2,14 @@
 
 CheatyKitty follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+- Clip animated progress to its own column while a previous answer remains visible.
+- Render overlay opacity on a transparent surface, avoiding native window-opacity artifacts.
+- Load model and reasoning suggestions from Codex CLI; allow manual IDs and new effort levels.
+- Add an independent FAST switch and pass the selected configuration to both answer and connection-test requests.
+- Route catalog-discovered text-only models through local OCR.
+
 ## [1.0.0] - 2026-10-01
 
 First source release for Apple Silicon Macs running macOS 14 or newer.

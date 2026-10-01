@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { access, chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { assertCodexExecutionMetadata, buildCodexArgs, buildCodexRequest, codexCandidateDetails, compactProcessDiagnostic, inspectCodex, preflightCodexPath, redactSensitiveDiagnostic, resolveCodex, resolveCodexPath, runCodex, testCodex, withTempWorkspace } from "../src/codex";
+import { assertCodexExecutionMetadata, buildCodexArgs, buildCodexRequest, buildValidationArgs, codexCandidateDetails, compactProcessDiagnostic, inspectCodex, preflightCodexPath, redactSensitiveDiagnostic, resolveCodex, resolveCodexPath, runCodex, testCodex, withTempWorkspace } from "../src/codex";
 import type { QuestionContext } from "../src/question-options";
 
 function fakeCodexScript(body: string, metadata = 'echo "model: $selected_model" >&2\necho "reasoning effort: medium" >&2') {
@@ -37,7 +37,7 @@ test("builds safe one-shot read-only arguments without a shell", () => {
   assert.equal(args[args.indexOf("--config") + 1], 'model_reasoning_effort="medium"');
 });
 
-test("passes each supported model with exact medium reasoning argv", () => {
+test("preserves exact model and effort for the original model profiles", () => {
   for (const model of ["gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.3-codex-spark"] as const) {
     const args = buildCodexArgs({ imagePath: "/tmp/a.png", schemaPath: "/tmp/s.json", outputPath: "/tmp/o.json", workDir: "/tmp/work" }, model, "medium");
     assert.deepEqual(args.slice(args.indexOf("--model"), args.indexOf("--model") + 4), ["--model", model, "--config", 'model_reasoning_effort="medium"']);
@@ -369,4 +369,42 @@ test("removes temporary screenshot, schema, and output after success", async () 
   });
   assert.equal(result, "ok");
   await assert.rejects(access(workspace));
+});
+
+test("custom models and reasoning reach answer and validation requests, independently of FAST", () => {
+  const paths = { imagePath: "/tmp/a.png", schemaPath: "/tmp/s.json", outputPath: "/tmp/o.json", workDir: "/tmp/work" };
+  for (const fast of [false, true]) {
+    const args = buildCodexArgs(paths, "future-model-v9", "ultra", "Synthetic prompt", true, fast);
+    const validation = buildValidationArgs("future-model-v9", "ultra", fast);
+    for (const request of [args, validation]) {
+      assert.equal(request[request.indexOf("--model") + 1], "future-model-v9");
+      assert.ok(request.includes('model_reasoning_effort="ultra"'));
+      assert.equal(request.includes('service_tier="fast"'), fast);
+      assert.ok(request.includes("--ignore-user-config"));
+    }
+  }
+  assert.doesNotThrow(() => assertCodexExecutionMetadata("model: future-model-v9\nreasoning effort: ultra\n", "future-model-v9", "ultra"));
+  assert.throws(() => assertCodexExecutionMetadata("model: future-model-v9\nreasoning effort: medium\n", "future-model-v9", "ultra"), /instead of/);
+});
+
+test("catalog-discovered text-only models use OCR and preserve selected effort and FAST", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "cheatykitty-custom-model-"));
+  const executable = path.join(dir, "codex"), ocr = path.join(dir, "ocr");
+  try {
+    await writeFile(executable, fakeCodexScript(`out=''
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--image" ]; then exit 9; fi
+  if [ "$1" = "--output-last-message" ]; then out="$2"; fi
+  shift
+done
+printf '%s' '{"question_text":"What is 2+2?","option_label":"B","option_number":"","answer_text":"4","confidence":1}' > "$out"`, 'echo "model: $selected_model" >&2\necho "reasoning effort: high" >&2'));
+    await writeFile(ocr, `#!/bin/sh\nprintf '%s' '{"lines":[{"text":"What is 2+2?","confidence":1},{"text":"A. 3","confidence":1},{"text":"B. 4","confidence":1}]}'\n`);
+    await Promise.all([chmod(executable, 0o700), chmod(ocr, 0o700)]);
+    const proofs: Parameters<NonNullable<Parameters<typeof runCodex>[5]["onInvocation"]>>[0][] = [];
+    const answer = await runCodex(Buffer.from("synthetic"), await preflightCodexPath(executable), 5, "future-text-model", "high", { ocrExecutable: ocr, imageAttached: false, fastMode: true, onInvocation: (proof) => proofs.push(proof) });
+    assert.equal(answer.text, "4");
+    assert.equal(proofs[0].imageAttached, false);
+    assert.equal(proofs[0].fastMode, true);
+    assert.ok(proofs[0].args.includes('service_tier="fast"'));
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });

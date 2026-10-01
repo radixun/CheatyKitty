@@ -11,22 +11,22 @@ test("migrates settings without model and interval to Luna medium and five secon
     await writeFile(path.join(directory, "settings.json"), JSON.stringify({ codexPath: " /bin/codex ", timeoutSeconds: 45, captureMode: "area" }));
     const loaded = await loadSettingsWithFallback(directory, path.join(directory, "former-product"));
     assert.equal(loaded.migrated, false);
-    assert.deepEqual(loaded.settings, { codexPath: "/bin/codex", timeoutSeconds: 45, captureMode: "area", model: "gpt-5.6-luna", reasoningEffort: "medium", autoIntervalSeconds: 5, overlayOpacity: 1, interactionMode: "manual", manualShortcut: "CommandOrControl+Shift+Space", resultLayout: "question-answer" });
+    assert.deepEqual(loaded.settings, { codexPath: "/bin/codex", timeoutSeconds: 45, captureMode: "area", model: "gpt-5.6-luna", reasoningEffort: "medium", fastMode: false, autoIntervalSeconds: 5, overlayOpacity: 1, interactionMode: "manual", manualShortcut: "CommandOrControl+Shift+Space", resultLayout: "question-answer" });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test("sanitizes and persists a selected model", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "cheatykitty-settings-"));
   try {
-    const saved = await saveSettings(directory, { codexPath: "  /bin/codex ", timeoutSeconds: 999, captureMode: "display", model: "gpt-5.6-sol", reasoningEffort: "medium", autoIntervalSeconds: 11, overlayOpacity: .63, interactionMode: "manual", manualShortcut: "CommandOrControl+Shift+Space", resultLayout: "answer-only" });
-    assert.deepEqual(saved, { codexPath: "/bin/codex", timeoutSeconds: 300, captureMode: "display", model: "gpt-5.6-sol", reasoningEffort: "medium", autoIntervalSeconds: 11, overlayOpacity: .63, interactionMode: "manual", manualShortcut: "CommandOrControl+Shift+Space", resultLayout: "answer-only" });
+    const saved = await saveSettings(directory, { codexPath: "  /bin/codex ", timeoutSeconds: 999, captureMode: "display", model: "gpt-5.6-sol", reasoningEffort: "medium", fastMode: false, autoIntervalSeconds: 11, overlayOpacity: .63, interactionMode: "manual", manualShortcut: "CommandOrControl+Shift+Space", resultLayout: "answer-only" });
+    assert.deepEqual(saved, { codexPath: "/bin/codex", timeoutSeconds: 300, captureMode: "display", model: "gpt-5.6-sol", reasoningEffort: "medium", fastMode: false, autoIntervalSeconds: 11, overlayOpacity: .63, interactionMode: "manual", manualShortcut: "CommandOrControl+Shift+Space", resultLayout: "answer-only" });
     assert.equal(JSON.parse(await readFile(path.join(directory, "settings.json"), "utf8")).model, "gpt-5.6-sol");
     assert.equal((await loadSettingsWithFallback(directory, path.join(directory, "former-product"))).settings.overlayOpacity, .63);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test("sanitizeSettings defaults missing or invalid fields", () => {
-  assert.deepEqual(sanitizeSettings({}), { codexPath: "", timeoutSeconds: 90, captureMode: "display", model: "gpt-5.6-luna", reasoningEffort: "medium", autoIntervalSeconds: 5, overlayOpacity: 1, interactionMode: "manual", manualShortcut: "CommandOrControl+Shift+Space", resultLayout: "question-answer" });
+  assert.deepEqual(sanitizeSettings({}), { codexPath: "", timeoutSeconds: 90, captureMode: "display", model: "gpt-5.6-luna", reasoningEffort: "medium", fastMode: false, autoIntervalSeconds: 5, overlayOpacity: 1, interactionMode: "manual", manualShortcut: "CommandOrControl+Shift+Space", resultLayout: "question-answer" });
 });
 
 test("sanitizes opacity and migrates legacy executable property", () => {
@@ -42,9 +42,9 @@ test("Auto capture is mutually exclusive with area selection", () => {
   assert.equal(settings.captureMode, "display");
 });
 
-test("normalizes legacy models and clamps Auto interval to 3..15", () => {
+test("preserves arbitrary models and clamps Auto interval to 3..15", () => {
   assert.equal(sanitizeSettings({ model: "" }).model, "gpt-5.6-luna");
-  assert.equal(sanitizeSettings({ model: "gpt-5.4" as never }).model, "gpt-5.6-luna");
+  assert.equal(sanitizeSettings({ model: "gpt-5.4" }).model, "gpt-5.4");
   assert.equal(sanitizeSettings({ model: "gpt-5.3-codex-spark" }).model, "gpt-5.3-codex-spark");
   assert.equal(sanitizeSettings({ autoIntervalSeconds: 1 }).autoIntervalSeconds, 3);
   assert.equal(sanitizeSettings({ autoIntervalSeconds: 99 }).autoIntervalSeconds, 15);
@@ -75,4 +75,18 @@ test("a malformed primary settings file does not import stale legacy state", asy
     assert.equal(loaded.migrated, false);
     assert.equal(loaded.settings.model, "gpt-5.6-luna");
   } finally { await Promise.all([rm(primary, { recursive: true, force: true }), rm(legacy, { recursive: true, force: true })]); }
+});
+
+test("new model IDs, reasoning levels and FAST survive a save/load round trip", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "cheatykitty-model-settings-"));
+  try {
+    const requested = sanitizeSettings({ model: " future-model-v9 ", reasoningEffort: " ULTRA ", fastMode: true });
+    const saved = await saveSettings(directory, requested);
+    const loaded = await loadSettingsWithFallback(directory, path.join(directory, "legacy"));
+    assert.equal(loaded.settings.model, "future-model-v9");
+    assert.equal(loaded.settings.reasoningEffort, "ultra");
+    assert.equal(loaded.settings.fastMode, true);
+    assert.deepEqual(loaded.settings, saved);
+    assert.equal(sanitizeSettings({ fastMode: "true" } as never).fastMode, false);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });

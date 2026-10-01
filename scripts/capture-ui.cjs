@@ -33,7 +33,7 @@ app.whenReady().then(async () => {
     await window.webContents.executeJavaScript("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 600))))");
     const answerOnly = preview.startsWith("answer-only");
     const mainProgressIds = preview === "demo-capturing" ? ["questionProgress"] : ["busy", "demo-thinking"].includes(preview) ? ["questionProgress", "answerProgress"] : [];
-    const requiredIds = isSettings ? ["closeSettings", "shortcutRecorder", "autoInterval", "autoIntervalValue", "saveButton"] : answerOnly ? ["brandLabel", "settingsButton", "quitButton", "answerLabel", ...(["answer-only-busy", "answer-only-thinking"].includes(preview) ? ["answerProgress"] : []), "shortcutHint"] : ["brandLabel", "settingsButton", "quitButton", "questionLabel", "answerLabel", ...mainProgressIds, "shortcutHint"];
+    const requiredIds = isSettings ? ["closeSettings", "modelId", "reasoningEffort", "fastMode", "refreshModels", "saveButton"] : answerOnly ? ["brandLabel", "settingsButton", "quitButton", "answerLabel", ...(["answer-only-busy", "answer-only-thinking"].includes(preview) ? ["answerProgress"] : []), "shortcutHint"] : ["brandLabel", "settingsButton", "quitButton", "questionLabel", "answerLabel", ...mainProgressIds, "shortcutHint"];
     const geometry = await window.webContents.executeJavaScript(`(() => {
       window.scrollTo(0, 0);
       const ids = ${JSON.stringify(requiredIds)};
@@ -57,21 +57,29 @@ app.whenReady().then(async () => {
     if (!isSettings && geometry.accessibility.quitButton.ariaLabel !== "Quit CheatyKitty") throw new Error(`Quit is missing its accessible name: ${JSON.stringify(geometry.accessibility.quitButton)}`);
     if (isSettings) {
       const settingsControls = await window.webContents.executeJavaScript(`(() => {
-        const group = document.getElementById('modelSelector');
-        const groupLabel = document.getElementById(group.getAttribute('aria-labelledby'));
-        const models = [...group.querySelectorAll('input[name="modelMode"]')].map((input) => ({ value: input.value, checked: input.checked, accessibleName: input.getAttribute('aria-label'), label: input.closest('label').innerText.replace(/\\s+/g, ' ').trim() }));
+        const fields = ["modelId", "reasoningEffort", "fastMode"].map((id) => { const element = document.getElementById(id); return { id, value: element.value, type: element.type, label: document.querySelector('label[for="' + id + '"]').textContent.trim() }; });
         const interval = document.getElementById('autoInterval');
-        return { group: { tagName: group.tagName, role: group.getAttribute('role'), labelledBy: group.getAttribute('aria-labelledby'), accessibleName: groupLabel.textContent.trim() }, models, interval: { value: interval.value, min: interval.min, max: interval.max, step: interval.step, disabled: interval.disabled, ariaDisabled: document.getElementById('autoIntervalField').getAttribute('aria-disabled'), readout: document.getElementById('autoIntervalValue').textContent.trim() } };
+        return { fields, interval: { value: interval.value, min: interval.min, max: interval.max, step: interval.step, disabled: interval.disabled, ariaDisabled: document.getElementById('autoIntervalField').getAttribute('aria-disabled'), readout: document.getElementById('autoIntervalValue').textContent.trim() } };
       })()`);
-      const expectedModels = ["gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.3-codex-spark"];
-      const expectedNames = ["Default — 5.6 Luna · Medium", "5.6 Sol · Medium", "5.3 Codex Spark · Medium"];
-      if (settingsControls.group.tagName !== "FIELDSET" || settingsControls.group.role !== "radiogroup" || settingsControls.group.labelledBy !== "modelSelectorLegend" || settingsControls.group.accessibleName !== "Choose one model and reasoning profile" || JSON.stringify(settingsControls.models.map((option) => option.value)) !== JSON.stringify(expectedModels) || JSON.stringify(settingsControls.models.map((option) => option.accessibleName)) !== JSON.stringify(expectedNames) || settingsControls.models.filter((option) => option.checked).length !== 1) {
+      if (settingsControls.fields[0].value !== "gpt-5.6-luna" || settingsControls.fields[1].value !== "medium" || settingsControls.fields[2].type !== "checkbox" || settingsControls.fields.some((field) => !field.label)) {
         throw new Error(`Settings model selector accessibility contract is invalid: ${JSON.stringify(settingsControls)}`);
       }
       const interval = settingsControls.interval;
       if (interval.value !== "7" || interval.min !== "3" || interval.max !== "15" || interval.step !== "1" || interval.disabled || interval.ariaDisabled !== "false" || interval.readout !== "7 s") {
         throw new Error(`Settings Auto interval semantics are invalid: ${JSON.stringify(interval)}`);
       }
+      geometry.scrolledControls = await window.webContents.executeJavaScript(`(() => {
+        const content = document.querySelector('.settings-content');
+        const viewport = content.getBoundingClientRect();
+        const controls = ["shortcutRecorder", "autoInterval", "overlayOpacity"].map((id) => {
+          const element = document.getElementById(id); element.scrollIntoView({block:'center'});
+          const rect = element.getBoundingClientRect();
+          return {id, top:rect.top, bottom:rect.bottom, visible:rect.top >= viewport.top && rect.bottom <= viewport.bottom};
+        });
+        content.scrollTop = 0;
+        return controls;
+      })()`);
+      if (geometry.scrolledControls.some((control) => !control.visible)) throw new Error(`Settings controls cannot be reached by scrolling: ${JSON.stringify(geometry.scrolledControls)}`);
       geometry.settingsControls = settingsControls;
     }
     if (answerOnly) {
@@ -105,10 +113,10 @@ app.whenReady().then(async () => {
           const progressRect = progress.getBoundingClientRect(); const textRect = text.getBoundingClientRect();
           const progressStyle = getComputedStyle(progress); const textStyle = getComputedStyle(text);
           const intersects = !(progressRect.right <= textRect.left || progressRect.left >= textRect.right || progressRect.bottom <= textRect.top || progressRect.top >= textRect.bottom);
-          return { progressId, textId, intersects, progressRect: { top: progressRect.top, bottom: progressRect.bottom }, textRect: { top: textRect.top, bottom: textRect.bottom }, progress: { backgroundColor: progressStyle.backgroundColor, backdropFilter: progressStyle.backdropFilter, filter: progressStyle.filter, opacity: progressStyle.opacity, pointerEvents: progressStyle.pointerEvents }, text: { filter: textStyle.filter, opacity: textStyle.opacity } };
+          return { progressId, textId, intersects, progressRect: { top: progressRect.top, bottom: progressRect.bottom }, textRect: { top: textRect.top, bottom: textRect.bottom }, progress: { backgroundColor: progressStyle.backgroundColor, backdropFilter: progressStyle.backdropFilter, filter: progressStyle.filter, overflow: progressStyle.overflow, opacity: progressStyle.opacity, pointerEvents: progressStyle.pointerEvents }, text: { filter: textStyle.filter, opacity: textStyle.opacity } };
         });
       })()`);
-      const invalidRetained = retainedStyles.filter((item) => item.intersects || item.text.filter !== "none" || item.text.opacity !== "1" || item.progress.filter !== "none" || item.progress.opacity !== "1" || item.progress.pointerEvents !== "none" || !["none", ""].includes(item.progress.backdropFilter) || !["rgba(0, 0, 0, 0)", "transparent"].includes(item.progress.backgroundColor));
+      const invalidRetained = retainedStyles.filter((item) => item.intersects || item.text.filter !== "none" || item.text.opacity !== "1" || item.progress.filter !== "none" || item.progress.overflow !== "hidden" || item.progress.opacity !== "1" || item.progress.pointerEvents !== "none" || !["none", ""].includes(item.progress.backdropFilter) || !["rgba(0, 0, 0, 0)", "transparent"].includes(item.progress.backgroundColor));
       if (invalidRetained.length) throw new Error(`Retained result is blurred/dimmed/covered for ${preview}: ${JSON.stringify({ retainedStyles, invalidRetained })}`);
       geometry.retainedStyles = retainedStyles;
     }

@@ -5,6 +5,10 @@ contextBridge.exposeInMainWorld("cheatykitty", {
   getSettings: (): Promise<Settings> => ipcRenderer.invoke("settings:get"),
   saveSettings: (settings: Settings): Promise<Settings> => ipcRenderer.invoke("settings:save", settings),
   previewOpacity: (opacity: number): Promise<void> => ipcRenderer.invoke("settings:preview-opacity", opacity),
+  onOpacity: (callback: (opacity: number) => void): void => {
+    ipcRenderer.removeAllListeners("overlay:opacity");
+    ipcRenderer.on("overlay:opacity", (_event, opacity) => callback(opacity));
+  },
   openSettings: (): void => ipcRenderer.send("settings:open"),
   closeSettings: (): void => ipcRenderer.send("settings:close"),
   quit: (): void => ipcRenderer.send("app:quit"),
@@ -15,7 +19,8 @@ contextBridge.exposeInMainWorld("cheatykitty", {
   retryShortcut: (): Promise<unknown> => ipcRenderer.invoke("shortcut:retry"),
   chooseCodex: (): Promise<string | null> => ipcRenderer.invoke("codex:choose"),
   inspectCodex: (customPath: string): Promise<CodexDiagnostic> => ipcRenderer.invoke("codex:inspect", customPath),
-  testCodex: (customPath: string, model: Settings["model"], reasoningEffort: Settings["reasoningEffort"]): Promise<CodexTestResult> => ipcRenderer.invoke("codex:test", customPath, model, reasoningEffort),
+  listModels: (customPath: string) => ipcRenderer.invoke("codex:models", customPath),
+  testCodex: (customPath: string, model: Settings["model"], reasoningEffort: Settings["reasoningEffort"], fastMode: boolean): Promise<CodexTestResult> => ipcRenderer.invoke("codex:test", customPath, model, reasoningEffort, fastMode),
   cancel: (): void => ipcRenderer.send("codex:cancel"),
   setHitRegions: (regions: unknown): void => ipcRenderer.send("overlay:hit-regions", regions),
   clearHitRegions: (): void => ipcRenderer.send("overlay:clear-hit-regions"),

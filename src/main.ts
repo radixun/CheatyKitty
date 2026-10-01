@@ -11,6 +11,7 @@ import { AutoCaptureScheduler } from "./auto-scheduler";
 import { shortcutLabel, stageShortcutRegistration, transactShortcutRegistration, validateHotkey } from "./hotkey";
 import { DEFAULT_SETTINGS } from "./settings";
 import { commitCurrentResult, isCompleteResult } from "./result-state";
+import { listCodexModels, type CatalogModel } from "./model-catalog";
 import { modelLabel as selectedModelLabel } from "./model-options";
 import { runCaptureHelper, terminateCaptureHelper } from "./capture-process";
 
@@ -19,6 +20,8 @@ let overlay: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let selectionWindow: BrowserWindow | null = null;
 let currentSettings: Settings;
+let knownModels: CatalogModel[] = [];
+let catalogExecutable = "";
 let busy = false;
 let cancelRequested = false;
 let pointerRegion: PointerRegion = "none";
@@ -128,7 +131,7 @@ function ensureCurrentRun(runId: number): void {
 }
 
 function modelLabel(model = currentSettings?.model ?? ""): string {
-  return selectedModelLabel(model);
+  return selectedModelLabel(model, currentSettings?.reasoningEffort, currentSettings?.fastMode);
 }
 
 function autoDetail(settings = currentSettings): string { return `Auto capture runs every ${settings.autoIntervalSeconds} seconds.`; }
@@ -139,7 +142,7 @@ function showOverlayInactive(): void {
 }
 
 function applyOverlayOpacity(opacity = currentSettings?.overlayOpacity ?? 1): void {
-  if (overlay && !overlay.isDestroyed()) overlay.setOpacity(sanitizeOpacity(opacity));
+  if (overlay && !overlay.isDestroyed()) overlay.webContents.send("overlay:opacity", sanitizeOpacity(opacity));
 }
 
 function applyClickThrough(): void {
@@ -215,8 +218,8 @@ function createOverlay(): BrowserWindow {
     x: primary.x + primary.width - width - 20,
     y: primary.y + 20,
     frame: false,
-    transparent: false,
-    backgroundColor: "#101010",
+    transparent: true,
+    backgroundColor: "#00000000",
     resizable: false,
     skipTaskbar: true,
     focusable: true,
@@ -380,6 +383,10 @@ async function runQaFlow(): Promise<void> {
   cancelRequested = false;
   try {
     const executable = await preflightCodex(currentSettings.codexPath);
+    if (catalogExecutable !== executable.path) {
+      try { knownModels = await listCodexModels(executable); catalogExecutable = executable.path; }
+      catch { knownModels = []; catalogExecutable = executable.path; } // Refresh in Settings retries discovery.
+    }
     ensureCurrentRun(runId);
     runPhase = "capturing";
     writeHotkeyProof("run-phase", { runId, phase: runPhase });
@@ -396,12 +403,15 @@ async function runQaFlow(): Promise<void> {
     writeHotkeyProof("run-phase", { runId, phase: runPhase });
     sendState({ kind: "thinking", model: modelLabel(), ...retainedAnswer(), ...runtimeState() });
     const answer = await runCodex(image.toPNG(), executable, currentSettings.timeoutSeconds, currentSettings.model, currentSettings.reasoningEffort, {
+      fastMode: currentSettings.fastMode,
+      imageAttached: knownModels.find((entry) => entry.model === currentSettings.model)?.inputModalities.includes("image"),
       ocrExecutable: nativeHelperPath("vision-ocr"),
       onInvocation: (proof) => writeHotkeyProof("codex-invocation", {
         runId,
         attempt: proof.attempt,
         model: proof.model,
         reasoningEffort: proof.reasoningEffort,
+        fastMode: proof.fastMode,
         input: proof.imageAttached ? "image+local-ocr" : "local-ocr-text-only",
         imageAttached: proof.imageAttached,
         ocrAvailable: proof.ocrAvailable,
@@ -540,14 +550,20 @@ function registerIpc(): void {
     return result.canceled ? null : result.filePaths[0];
   });
   ipcMain.handle("codex:inspect", (_event, customPath: string) => inspectCodex(customPath));
-  ipcMain.handle("codex:test", async (_event, customPath: string, model: Settings["model"], reasoningEffort: Settings["reasoningEffort"]) => {
+  ipcMain.handle("codex:models", async (_event, customPath: string) => {
+    const executable = await preflightCodex(customPath);
+    const models = await listCodexModels(executable);
+    knownModels = models; catalogExecutable = executable.path;
+    return models;
+  });
+  ipcMain.handle("codex:test", async (_event, customPath: string, model: Settings["model"], reasoningEffort: Settings["reasoningEffort"], fastMode: boolean) => {
     const diagnostic = await inspectCodex(customPath);
     if (diagnostic.status !== "ready") return {
       connectionStatus: diagnostic.status === "wrong-binary" ? "wrong-binary" : "error",
       modelStatus: "Not tested",
       message: diagnostic.message
     };
-    return testCodex(diagnostic.resolvedPath, model, reasoningEffort);
+    return testCodex(diagnostic.resolvedPath, model, reasoningEffort, fastMode === true);
   });
   ipcMain.on("codex:cancel", cancelQaFlow);
   ipcMain.on("overlay:hit-regions", (_event, regions: unknown) => acceptHitRegions(regions));

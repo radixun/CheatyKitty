@@ -41,7 +41,7 @@ CheatyKitty helps find answers to test questions already visible on your screen:
 1. **Trigger** — Start a run with a global shortcut, or let Auto mode run every 3–15 seconds.
 2. **Capture** — Capture the visible test question from the screen.
 3. **Recognize** — Read the question and visible choices with image understanding and local Apple Vision OCR where needed.
-4. **Select** — Ask the exact chosen Codex model, at `medium` reasoning, for the best visible answer.
+4. **Select** — Ask the exact chosen Codex model, at your chosen reasoning effort, for the best visible answer.
 5. **Present** — Show the recognized question and concise selection, such as `B — 4`, without switching apps.
 
 Auto mode can repeat this answer flow hands-free after the previous run finishes. CheatyKitty suggests an answer; it **does not click, fill, or submit controls in other apps**.
@@ -61,7 +61,8 @@ The compact overlay supports a two-column **Question + Answer** view and a full-
 #### Everything important is explicit
 
 - Codex discovery, version, authentication, and exact-model diagnostics
-- Luna, Sol, and Spark model selection with no silent fallback
+- Models and reasoning suggestions loaded from Codex CLI, with free entry of any ID or effort
+- Independent FAST toggle, with no silent model fallback
 - Manual shortcut or non-overlapping Auto capture
 - 3–15 second Auto interval
 - Question + Answer or Answer-only layout
@@ -82,15 +83,13 @@ CheatyKitty has no API-key field and never copies ChatGPT or Codex credentials i
 
 Manual and Auto are mutually exclusive.
 
-### Supported Codex profiles
+### Model, reasoning, and FAST
 
-| Profile | Input path | Notes |
-| --- | --- | --- |
-| **Default — `gpt-5.6-luna` · medium** | Screenshot + optional local OCR context | Default visual route. |
-| **`gpt-5.6-sol` · medium** | Screenshot + optional local OCR context | Alternative visual route. |
-| **`gpt-5.3-codex-spark` · medium** | Local Vision OCR text only | Fails clearly if the capture cannot be read locally. |
+Settings reads the available models and reasoning levels from `codex app-server` using [`model/list`](https://developers.openai.com/codex/app-server#list-models-modellist). Click **Refresh models** to update the suggestions. New models require no CheatyKitty release: both fields also accept manual entry when a model is missing from the catalog or discovery is unavailable.
 
-CheatyKitty uses the chosen profile exactly and reports an error instead of silently switching models.
+**FAST** is independent of reasoning effort. It requests `service_tier="fast"` through Codex CLI; availability and usage costs depend on the model and account. See [Codex configuration](https://developers.openai.com/codex/config-reference). **Test connection + model** validates the chosen combination. An unsupported model, effort, or tier produces an error; the app does not switch to a different model.
+
+The existing default remains `gpt-5.6-luna`, `medium`, FAST off. Models advertised as text-only use local Apple Vision OCR without attaching an image. Models with image support use the screenshot plus optional OCR context. Spark retains its text-only route even with an older or unavailable catalog.
 
 ## Quick start
 

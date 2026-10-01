@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Settings } from "./types";
-import { DEFAULT_MODEL, DEFAULT_REASONING_EFFORT, normalizeModel } from "./model-options";
+import { DEFAULT_MODEL, DEFAULT_REASONING_EFFORT, normalizeModel, normalizeReasoningEffort } from "./model-options";
 
 export const DEFAULT_SETTINGS: Settings = {
   codexPath: "",
@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS: Settings = {
   captureMode: "display",
   model: DEFAULT_MODEL,
   reasoningEffort: DEFAULT_REASONING_EFFORT,
+  fastMode: false,
   autoIntervalSeconds: 5,
   overlayOpacity: 1,
   interactionMode: "manual",
@@ -39,7 +40,8 @@ export function sanitizeSettings(settings: SettingsInput): Settings {
     timeoutSeconds: Number.isFinite(settings.timeoutSeconds) ? Math.max(15, Math.min(300, Number(settings.timeoutSeconds))) : 90,
     captureMode: interactionMode === "auto" ? "display" : settings.captureMode === "area" ? "area" : "display",
     model: normalizeModel(settings.model),
-    reasoningEffort: DEFAULT_REASONING_EFFORT,
+    reasoningEffort: normalizeReasoningEffort(settings.reasoningEffort),
+    fastMode: settings.fastMode === true,
     autoIntervalSeconds: sanitizeAutoInterval(settings.autoIntervalSeconds),
     overlayOpacity: sanitizeOpacity(settings.overlayOpacity),
     interactionMode,

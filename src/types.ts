@@ -9,6 +9,7 @@ export interface Settings {
   captureMode: CaptureMode;
   model: ModelId;
   reasoningEffort: ReasoningEffort;
+  fastMode: boolean;
   autoIntervalSeconds: number;
   overlayOpacity: number;
   interactionMode: InteractionMode;

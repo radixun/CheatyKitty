@@ -5,9 +5,40 @@ let recordedShortcut = "CommandOrControl+Shift+Space";
 let savedShortcut = recordedShortcut;
 let recorderState = "idle";
 let recordingArmedAt = 0;
+let models = [];
+let catalogRequest = 0;
 
-function selectedModel() { return document.querySelector('input[name="modelMode"]:checked').value; }
-function selectedReasoningEffort() { return "medium"; }
+function updateModelSuggestions() {
+  const model = models.find((entry) => entry.model === selectedModel());
+  $("reasoningSuggestions").replaceChildren(...(model?.reasoningEfforts || []).map((entry) => {
+    const option = document.createElement("option"); option.value = entry.effort; option.label = entry.description; return option;
+  }));
+  const fastTier = model?.serviceTiers.find((tier) => ["fast", "priority"].includes(tier.id));
+  $("fastHelp").textContent = fastTier ? `FAST: ${fastTier.description || "Faster processing; may consume more usage."}` : model ? "This catalog does not advertise FAST for this model. Test connection + model to check availability." : "FAST availability depends on the model and account. May consume more usage.";
+}
+
+async function refreshModels() {
+  const request = ++catalogRequest;
+  $("modelCatalogStatus").textContent = "Loading models from Codex CLI…";
+  try {
+    const result = await api.listModels($("codexPath").value.trim());
+    if (request !== catalogRequest) return;
+    models = result;
+    $("modelSuggestions").replaceChildren(...models.map((entry) => {
+      const option = document.createElement("option"); option.value = entry.model; option.label = entry.displayName; return option;
+    }));
+    $("modelCatalogStatus").textContent = `${models.length} models from Codex CLI. Choose a suggestion or enter any model ID and reasoning effort.`;
+  } catch (error) {
+    if (request !== catalogRequest) return;
+    models = []; $("modelSuggestions").replaceChildren();
+    $("modelCatalogStatus").textContent = `Catalog unavailable. Enter model ID and reasoning manually. ${error.message || error}`;
+  }
+  updateModelSuggestions();
+}
+
+
+function selectedModel() { return $("modelId").value.trim(); }
+function selectedReasoningEffort() { return $("reasoningEffort").value.trim(); }
 function selectedInteractionMode() { return document.querySelector('input[name="interactionMode"]:checked').value; }
 function selectedResultLayout() { return document.querySelector('input[name="resultLayout"]:checked').value; }
 function setOpacityReadout() { $("opacityValue").textContent = `${$("overlayOpacity").value}%`; }
@@ -67,6 +98,7 @@ async function refreshDiagnostic(clearOverride = false) {
   try {
     const result = await api.inspectCodex($("codexPath").value.trim());
     card.dataset.status = result.status; $("activePath").textContent = result.resolvedPath || "No executable found"; $("sourceStatus").textContent = `${result.source} · ${result.status === "ready" ? "Ready" : "Unavailable"}`; $("cliVersion").textContent = result.version; $("authStatus").textContent = result.authStatus === "authenticated" ? "Authenticated" : result.authStatus === "not-authenticated" ? "Not signed in" : "Unknown"; $("modelStatus").textContent = result.modelStatus; $("connectionStatus").textContent = result.connectionStatus; $("diagnosticMessage").textContent = result.message;
+    void refreshModels();
   } catch (error) { card.dataset.status = "error"; $("activePath").textContent = "Diagnostic failed"; $("diagnosticMessage").textContent = error.message || String(error); }
 }
 
@@ -76,11 +108,14 @@ async function load() {
   document.querySelector(`input[name="interactionMode"][value="${settings.interactionMode}"]`).checked = true;
   document.querySelector(`input[name="resultLayout"][value="${settings.resultLayout || "question-answer"}"]`).checked = true;
   savedShortcut = settings.manualShortcut; showShortcut(settings.manualShortcut);
-  document.querySelector(`input[name="modelMode"][value="${settings.model}"]`).checked = true;
+  $("modelId").value = settings.model; $("reasoningEffort").value = settings.reasoningEffort; $("fastMode").checked = settings.fastMode === true;
   setOpacityReadout(); setAutoIntervalReadout(); updateModeUi(); announceRecorder("idle", `${shortcutLabel(savedShortcut)} is active.`); await refreshDiagnostic(false);
 }
 
 document.querySelectorAll('input[name="interactionMode"]').forEach((input) => input.addEventListener("change", updateModeUi));
+$("refreshModels").addEventListener("click", refreshModels);
+$("modelId").addEventListener("input", updateModelSuggestions);
+$("codexPath").addEventListener("change", refreshModels);
 $("autoInterval").addEventListener("input", setAutoIntervalReadout);
 $("shortcutRecorder").addEventListener("click", startRecording);
 $("retryShortcut").addEventListener("click", async () => { try { const result = await api.retryShortcut(); announceRecorder(result.ok ? "active" : "degraded", result.message, !result.ok); } catch (error) { announceRecorder("degraded", error.message || String(error), true); } });
@@ -88,15 +123,17 @@ $("overlayOpacity").addEventListener("input", () => { setOpacityReadout(); api.p
 $("detectButton").addEventListener("click", () => refreshDiagnostic(true));
 $("browseButton").addEventListener("click", async () => { const selected = await api.chooseCodex(); if (selected) { $("codexPath").value = selected; await refreshDiagnostic(false); } });
 $("testButton").addEventListener("click", async () => {
+  if (!selectedModel() || !selectedReasoningEffort()) { $("saveDiagnostic").textContent = "Enter a model ID and reasoning effort."; return; }
   const button = $("testButton");
   button.disabled = true; $("saveDiagnostic").textContent = "Testing executable, authentication, and selected model…";
-  try { const result = await api.testCodex($("codexPath").value.trim(), selectedModel(), selectedReasoningEffort()); $("modelStatus").textContent = result.modelStatus; $("connectionStatus").textContent = result.connectionStatus.replaceAll("-", " "); $("saveDiagnostic").textContent = result.message; }
+  try { const result = await api.testCodex($("codexPath").value.trim(), selectedModel(), selectedReasoningEffort(), $("fastMode").checked); $("modelStatus").textContent = result.modelStatus; $("connectionStatus").textContent = result.connectionStatus.replaceAll("-", " "); $("saveDiagnostic").textContent = result.message; }
   catch (error) { $("saveDiagnostic").textContent = error.message || String(error); } finally { button.disabled = false; }
 });
 $("saveButton").addEventListener("click", async () => {
   if (["arming", "recording", "validating"].includes(recorderState)) await stopRecording();
+  if (!selectedModel() || !selectedReasoningEffort()) { $("saveDiagnostic").textContent = "Enter a model ID and reasoning effort."; return; }
   const button = $("saveButton"); button.disabled = true; announceRecorder("registering", `Registering ${shortcutLabel(recordedShortcut)} and saving settings…`); $("saveDiagnostic").textContent = "Saving settings…";
-  const result = await window.CheatyKittySettingsActions.persistSettings(api, { codexPath: $("codexPath").value, timeoutSeconds: Number($("timeout").value), captureMode: $("captureMode").value, model: selectedModel(), reasoningEffort: selectedReasoningEffort(), autoIntervalSeconds: Number($("autoInterval").value), overlayOpacity: Number($("overlayOpacity").value) / 100, interactionMode: selectedInteractionMode(), manualShortcut: recordedShortcut, resultLayout: selectedResultLayout() });
+  const result = await window.CheatyKittySettingsActions.persistSettings(api, { codexPath: $("codexPath").value, timeoutSeconds: Number($("timeout").value), captureMode: $("captureMode").value, model: selectedModel(), reasoningEffort: selectedReasoningEffort(), fastMode: $("fastMode").checked, autoIntervalSeconds: Number($("autoInterval").value), overlayOpacity: Number($("overlayOpacity").value) / 100, interactionMode: selectedInteractionMode(), manualShortcut: recordedShortcut, resultLayout: selectedResultLayout() });
   if (result.ok) { savedShortcut = result.settings.manualShortcut; showShortcut(savedShortcut); announceRecorder("saved", selectedInteractionMode() === "manual" ? `${shortcutLabel(savedShortcut)} saved and active.` : `${shortcutLabel(savedShortcut)} saved; manual shortcut is inactive in Auto mode.`); $("saveDiagnostic").textContent = "Settings saved."; }
   else { const degraded = /inactive; use Retry/i.test(result.message); recordedShortcut = savedShortcut; showShortcut(savedShortcut); announceRecorder(degraded ? "degraded" : "error", `${result.message} The previous shortcut remains saved; use Retry if its active registration could not be confirmed.`, true); $("saveDiagnostic").textContent = result.message; $("saveDiagnostic").setAttribute("role", "alert"); }
   button.disabled = false;

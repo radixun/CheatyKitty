@@ -21,18 +21,14 @@ test("retained progress uses a non-obscuring foreground row without blur or dimm
   assert.match(css, /\.column-progress \{[^}]+pointer-events:none/);
 });
 
-test("model selector is one named radio group with exact option names", async () => {
+test("model and effort accept free input and FAST has an accessible checkbox", async () => {
   const html = await readFile("src/renderer/settings.html", "utf8");
-  const group = html.match(/<fieldset id="modelSelector"[\s\S]*?<\/fieldset>/)?.[0] || "";
-  assert.match(group, /role="radiogroup"/);
-  assert.match(group, /aria-labelledby="modelSelectorLegend"/);
-  assert.match(group, /<legend id="modelSelectorLegend">Choose one model and reasoning profile<\/legend>/);
-  const radios = [...group.matchAll(/<input type="radio" name="modelMode"[^>]*>/g)].map((match) => match[0]);
-  assert.equal(radios.length, 3);
-  assert.deepEqual(radios.map((radio) => radio.match(/aria-label="([^"]+)"/)?.[1]), [
-    "Default — 5.6 Luna · Medium",
-    "5.6 Sol · Medium",
-    "5.3 Codex Spark · Medium"
-  ]);
-  assert.equal(radios.filter((radio) => /\schecked(?:\s|\/>)/.test(radio)).length, 1);
+  for (const id of ["modelId", "reasoningEffort", "fastMode"]) {
+    assert.match(html, new RegExp(`for="${id}"`));
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(html, /id="modelId" list="modelSuggestions"/);
+  assert.match(html, /id="reasoningEffort" list="reasoningSuggestions"/);
+  assert.match(html, /id="fastMode" type="checkbox"/);
+  assert.doesNotMatch(html, /name="modelMode"/);
 });

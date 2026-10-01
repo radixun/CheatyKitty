@@ -23,7 +23,7 @@ Application tests and smoke launches run locally on a supported Mac. Hosted CI p
 
 - Keep one coherent change per pull request.
 - Add regression coverage for behavior changes.
-- Preserve exact model IDs and medium reasoning; do not add silent model fallback.
+- Preserve chosen model IDs, reasoning efforts, and FAST; do not add silent model fallback.
 - Keep Codex execution shell-free, ephemeral, read-only, timeout-bound, and cleanup-safe.
 - Update README or CHANGELOG when behavior, requirements, or limitations change.
 - Run `npm run verify:hygiene` before opening the pull request.

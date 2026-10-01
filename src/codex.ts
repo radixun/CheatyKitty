@@ -5,7 +5,7 @@ import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { CodexDiagnostic, CodexTestResult, QaAnswer } from "./types";
-import { DEFAULT_MODEL, DEFAULT_REASONING_EFFORT, modelLabel, normalizeModel, type ModelId, type ReasoningEffort } from "./model-options";
+import { DEFAULT_MODEL, DEFAULT_REASONING_EFFORT, modelLabel, normalizeModel, normalizeReasoningEffort, type ModelId, type ReasoningEffort } from "./model-options";
 import { parseCodexAnswer } from "./parser";
 import { AnswerResolutionError, parseOcrPayload, reconcileAnswer, type QuestionContext } from "./question-options";
 
@@ -113,15 +113,16 @@ export async function preflightCodex(customPath = "", env = process.env, home = 
 }
 
 export interface CodexArgumentPaths { imagePath: string; schemaPath: string; outputPath: string; workDir: string }
-export interface CodexInvocationProof { attempt: number; model: ModelId; reasoningEffort: ReasoningEffort; imageAttached: boolean; args: string[]; prompt: string; ocrText: string; ocrAvailable: boolean; labeledOptionLabels: string[]; orderedOptionSha256s: string[] }
-export interface RunCodexOptions { ocrExecutable?: string; onInvocation?: (proof: CodexInvocationProof) => void }
+export interface CodexInvocationProof { attempt: number; model: ModelId; reasoningEffort: ReasoningEffort; fastMode: boolean; imageAttached: boolean; args: string[]; prompt: string; ocrText: string; ocrAvailable: boolean; labeledOptionLabels: string[]; orderedOptionSha256s: string[] }
+export interface RunCodexOptions { fastMode?: boolean; imageAttached?: boolean; ocrExecutable?: string; onInvocation?: (proof: CodexInvocationProof) => void }
 
-export function buildCodexArgs(paths: CodexArgumentPaths, model: ModelId = DEFAULT_MODEL, reasoningEffort: ReasoningEffort = DEFAULT_REASONING_EFFORT, prompt = PROMPT, attachImage = model !== SPARK_MODEL): string[] {
+export function buildCodexArgs(paths: CodexArgumentPaths, model: ModelId = DEFAULT_MODEL, reasoningEffort: ReasoningEffort = DEFAULT_REASONING_EFFORT, prompt = PROMPT, attachImage = model !== SPARK_MODEL, fastMode = false): string[] {
   const args = [
     "exec", "--ephemeral", "--ignore-user-config", "--sandbox", "read-only",
     "--skip-git-repo-check", "--color", "never"
   ];
-  args.push("--model", normalizeModel(model), "--config", `model_reasoning_effort=\"${reasoningEffort}\"`);
+  args.push("--model", normalizeModel(model), "--config", `model_reasoning_effort=${JSON.stringify(normalizeReasoningEffort(reasoningEffort))}`);
+  if (fastMode) args.push("--config", 'service_tier="fast"');
   return [
     ...args, ...(attachImage ? ["--image", paths.imagePath] : []),
     "--output-schema", paths.schemaPath, "--output-last-message", paths.outputPath,
@@ -148,22 +149,22 @@ function promptForContext(context: QuestionContext, repairRaw = "", imageAttache
   return `${PROMPT}\n\n${ocrContext}\n\nParsed visible options:\n${options}${repair}`;
 }
 
-export function buildCodexRequest(paths: CodexArgumentPaths, context: QuestionContext, model: ModelId = DEFAULT_MODEL, reasoningEffort: ReasoningEffort = DEFAULT_REASONING_EFFORT, attempt = 1, repairRaw = ""): CodexInvocationProof {
+export function buildCodexRequest(paths: CodexArgumentPaths, context: QuestionContext, model: ModelId = DEFAULT_MODEL, reasoningEffort: ReasoningEffort = DEFAULT_REASONING_EFFORT, attempt = 1, repairRaw = "", fastMode = false, imageAttached = normalizeModel(model) !== SPARK_MODEL): CodexInvocationProof {
   const normalizedModel = normalizeModel(model);
-  const imageAttached = normalizedModel !== SPARK_MODEL;
   const prompt = promptForContext(context, repairRaw, imageAttached);
   return {
-    attempt, model: normalizedModel, reasoningEffort, imageAttached,
-    args: buildCodexArgs(paths, normalizedModel, reasoningEffort, prompt, imageAttached), prompt,
+    attempt, model: normalizedModel, reasoningEffort: normalizeReasoningEffort(reasoningEffort), fastMode, imageAttached,
+    args: buildCodexArgs(paths, normalizedModel, reasoningEffort, prompt, imageAttached, fastMode), prompt,
     ocrText: context.ocrText, ocrAvailable: context.ocrAvailable !== false,
     labeledOptionLabels: context.options.map((option) => option.label),
     orderedOptionSha256s: (context.orderedOptions ?? []).map((option) => createHash("sha256").update(option.text).digest("hex"))
   };
 }
 
-export function buildValidationArgs(model: ModelId = DEFAULT_MODEL, reasoningEffort: ReasoningEffort = DEFAULT_REASONING_EFFORT): string[] {
+export function buildValidationArgs(model: ModelId = DEFAULT_MODEL, reasoningEffort: ReasoningEffort = DEFAULT_REASONING_EFFORT, fastMode = false): string[] {
   const args = ["exec", "--ephemeral", "--ignore-user-config", "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never"];
-  args.push("--model", normalizeModel(model), "--config", `model_reasoning_effort=\"${reasoningEffort}\"`);
+  args.push("--model", normalizeModel(model), "--config", `model_reasoning_effort=${JSON.stringify(normalizeReasoningEffort(reasoningEffort))}`);
+  if (fastMode) args.push("--config", 'service_tier="fast"');
   args.push("Return only OK.");
   return args;
 }
@@ -242,7 +243,7 @@ async function spawnCaptured(executable: string, args: string[], timeoutMs: numb
 }
 
 export function assertCodexExecutionMetadata(stderr: string, model: ModelId, reasoningEffort: ReasoningEffort): void {
-  const resolvedModels = [...stderr.matchAll(/^model:[ \t]*(.*?)[ \t]*$/gmi)].map((match) => match[1].toLowerCase());
+  const resolvedModels = [...stderr.matchAll(/^model:[ \t]*(.*?)[ \t]*$/gmi)].map((match) => match[1]);
   const resolvedReasoningValues = [...stderr.matchAll(/^reasoning effort:[ \t]*(.*?)[ \t]*$/gmi)].map((match) => match[1].toLowerCase());
   if (resolvedModels.length !== 1 || resolvedReasoningValues.length !== 1) {
     throw new Error(`Codex must report exactly one authoritative model and one reasoning metadata line; received ${resolvedModels.length} model and ${resolvedReasoningValues.length} reasoning lines. The answer was rejected.`);
@@ -251,7 +252,7 @@ export function assertCodexExecutionMetadata(stderr: string, model: ModelId, rea
   const [resolvedReasoning] = resolvedReasoningValues;
   const expectedModel = normalizeModel(model);
   if (!resolvedModel || !resolvedReasoning) throw new Error("Codex reported empty authoritative model or reasoning metadata. The answer was rejected.");
-  if (resolvedModel !== expectedModel || resolvedReasoning !== reasoningEffort) {
+  if (resolvedModel !== expectedModel || resolvedReasoning !== normalizeReasoningEffort(reasoningEffort)) {
     throw new Error(`Codex resolved ${resolvedModel}/${resolvedReasoning} instead of ${expectedModel}/${reasoningEffort}. The answer was rejected; no fallback is allowed.`);
   }
 }
@@ -285,24 +286,25 @@ export async function runCodex(png: Buffer, executable: VerifiedCodexExecutable,
   await assertExecutableIdentity(executable);
   return withTempWorkspace(png, async (paths) => {
     const normalizedModel = normalizeModel(model);
+    const imageAttached = options.imageAttached ?? normalizedModel !== SPARK_MODEL;
     const ocrExecutable = options.ocrExecutable ?? path.join(__dirname, "native", "vision-ocr");
     let context: QuestionContext;
     try { context = await runVisionOcr(paths.imagePath, ocrExecutable, timeoutSeconds); }
     catch (error) {
       const diagnostic = compactProcessDiagnostic(error instanceof Error ? error.message : String(error), 260);
-      if (normalizedModel === SPARK_MODEL) throw new Error(`Spark needs readable local OCR because it cannot accept the screenshot. ${diagnostic} Try a larger capture area or clearer text.`);
+      if (!imageAttached) throw new Error(`${normalizedModel === SPARK_MODEL ? "Spark" : normalizedModel} needs readable local OCR because it cannot accept the screenshot. ${diagnostic} Try a larger capture area or clearer text.`);
       context = { lines: [], questionText: "", options: [], ocrText: "", ocrAvailable: false, ocrDiagnostic: diagnostic };
     }
     let previousRaw = "";
     let resolutionError: AnswerResolutionError | null = null;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
-      const request = buildCodexRequest(paths, context, normalizedModel, reasoningEffort, attempt, previousRaw);
+      const request = buildCodexRequest(paths, context, normalizedModel, reasoningEffort, attempt, previousRaw, options.fastMode, imageAttached);
       options.onInvocation?.(request);
       const execution = await spawnCaptured(executable.path, request.args, timeoutSeconds * 1000, "Codex", executable);
       assertCodexExecutionMetadata(execution.stderr, normalizedModel, reasoningEffort);
       const raw = await readFile(paths.outputPath, "utf8");
       const parsed = parseCodexAnswer(raw);
-      try { return reconcileAnswer(parsed, context, { finalAttempt: attempt === 2, authority: normalizedModel === SPARK_MODEL ? "ocr-text" : "vision-image" }); }
+      try { return reconcileAnswer(parsed, context, { finalAttempt: attempt === 2, authority: imageAttached ? "vision-image" : "ocr-text" }); }
       catch (error) {
         if (!(error instanceof AnswerResolutionError)) throw error;
         resolutionError = error;
@@ -313,22 +315,22 @@ export async function runCodex(png: Buffer, executable: VerifiedCodexExecutable,
   });
 }
 
-export async function testCodex(executable: string, model: ModelId = DEFAULT_MODEL, reasoningEffort: ReasoningEffort = DEFAULT_REASONING_EFFORT): Promise<CodexTestResult> {
+export async function testCodex(executable: string, model: ModelId = DEFAULT_MODEL, reasoningEffort: ReasoningEffort = DEFAULT_REASONING_EFFORT, fastMode = false): Promise<CodexTestResult> {
   try {
     const version = await spawnCaptured(executable, ["--version"], 8000);
     if (!/codex/i.test(`${version.stdout} ${version.stderr}`)) return { connectionStatus: "wrong-binary", modelStatus: "Not tested", message: "The selected file does not identify itself as Codex CLI." };
     try { await spawnCaptured(executable, ["login", "status"], 8000); }
     catch { return { connectionStatus: "not-authenticated", modelStatus: "Not tested", message: "Not signed in. Run `codex login` in Terminal, then Refresh." }; }
-    const validation = await spawnCaptured(executable, buildValidationArgs(model, reasoningEffort), 60000);
+    const validation = await spawnCaptured(executable, buildValidationArgs(model, reasoningEffort, fastMode), 60000);
     assertCodexExecutionMetadata(validation.stderr, model, reasoningEffort);
     const resolvedModel = normalizeModel(model);
-    const modelStatus = `${modelLabel(model)} → ${resolvedModel}`;
+    const modelStatus = `${modelLabel(model, reasoningEffort, fastMode)} → ${resolvedModel}`;
     return { connectionStatus: "connected", modelStatus, message: `${modelStatus} validated successfully.` };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (/timed out/i.test(message)) return { connectionStatus: "timeout", modelStatus: "Validation timed out", message: "Codex did not respond in time. Check connectivity and retry." };
-    if (/authoritative model|resolved .* instead of|no fallback/i.test(message)) return { connectionStatus: "model-unavailable", modelStatus: "Unexpected model metadata", message: "Codex did not confirm the exact selected model and medium reasoning. No fallback was accepted." };
-    if (/model|unsupported|not found/i.test(message)) return { connectionStatus: "model-unavailable", modelStatus: "Unavailable", message: "The selected model is unavailable for this CLI or account." };
+    if (/authoritative model|resolved .* instead of|no fallback/i.test(message)) return { connectionStatus: "model-unavailable", modelStatus: "Unexpected model metadata", message: "Codex did not confirm the exact selected model and reasoning effort. No fallback was accepted." };
+    if (/model|unsupported|not found/i.test(message)) return { connectionStatus: "model-unavailable", modelStatus: "Unavailable", message: `The selected model, reasoning effort, or FAST tier is unavailable: ${compactProcessDiagnostic(message)}` };
     if (/network|connect|dns|socket|tls|offline/i.test(message)) return { connectionStatus: "network-error", modelStatus: "Not validated", message: "Could not reach Codex services. Check the network and retry." };
     return { connectionStatus: "error", modelStatus: "Not validated", message: "Codex validation failed. Refresh the executable and authentication status, then retry." };
   }
