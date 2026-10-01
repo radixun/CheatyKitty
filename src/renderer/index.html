@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'" />
+  <title>CheatyKitty</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-state="ready">
+  <main class="panel main-panel">
+    <header class="titlebar">
+      <div id="dragRegion" class="brand-block drag-hotspot" title="Drag CheatyKitty"><span id="brandLabel" class="brand">CheatyKitty</span><span class="brand-mark" aria-hidden="true"></span></div>
+      <span id="modelReadout" class="model-readout">Default — 5.6 Luna · Medium</span>
+      <span id="modeReadout" class="mode-readout">Manual</span>
+      <button id="settingsButton" class="icon-button settings-hotspot" title="Settings" aria-label="Open Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M8 14v6" /></svg>
+      </button>
+      <button id="quitButton" class="icon-button quit-hotspot" title="Quit CheatyKitty" aria-label="Quit CheatyKitty">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+      </button>
+    </header>
+    <div id="runStatus" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+    <section id="resultColumns" class="columns">
+      <article id="questionColumn" class="result-column">
+        <div id="questionHeading" class="column-heading"><span id="questionLabel">Question</span><span id="questionStatus" class="column-status">Ready</span></div>
+        <div id="questionProgress" class="column-progress hidden" aria-hidden="true"><span></span><strong id="questionProgressText">Recognizing new question…</strong></div>
+        <p id="questionText" class="result-text">Press your shortcut to capture.</p>
+      </article>
+      <article id="answerColumn" class="result-column">
+        <div id="answerHeading" class="column-heading"><span id="answerLabel">Answer</span><span id="answerStatus" class="column-status">Waiting</span></div>
+        <div id="answerProgress" class="column-progress hidden" aria-hidden="true"><span></span><strong id="answerProgressText">Solving new answer…</strong></div>
+        <p id="answerText" class="result-text">The selected answer will appear here.</p>
+      </article>
+    </section>
+    <footer id="shortcutHint" class="shortcut-hint">Manual · ready</footer>
+  </main>
+  <script src="view-model.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

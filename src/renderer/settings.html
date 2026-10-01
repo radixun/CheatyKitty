@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'" />
+  <title>CheatyKitty Settings</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="settings-body">
+  <main class="panel settings-panel">
+    <header class="titlebar"><div class="brand-block"><span class="brand">Settings</span></div><button id="closeSettings" class="icon-button" aria-label="Close Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg></button></header>
+    <div class="settings-content">
+      <section class="settings-section">
+        <span class="eyebrow">Codex CLI connection</span>
+        <h1>Local executable</h1>
+        <p class="helper prominent">CheatyKitty runs a local <code>codex</code> executable. This is a file path, not a URL or API endpoint.</p>
+        <div class="field-group"><label for="codexPath">Saved executable override</label><div class="path-row"><input id="codexPath" placeholder="Auto-detect from PATH and installed apps" spellcheck="false" /><button id="browseButton" class="secondary">Choose executable</button></div></div>
+        <div class="button-row"><button id="detectButton" class="secondary">Auto-detect / Refresh</button><button id="testButton" class="secondary">Test connection + model</button></div>
+        <div id="codexDiagnostic" class="connection-card" data-status="loading" aria-live="polite">
+          <div><span class="card-label">Active path</span><strong id="activePath">Detecting…</strong></div>
+          <div class="diagnostic-grid"><span><span class="card-label">Source / status</span><strong id="sourceStatus">—</strong></span><span><span class="card-label">CLI version</span><strong id="cliVersion">—</strong></span><span><span class="card-label">Authentication</span><strong id="authStatus">—</strong></span><span><span class="card-label">Model</span><strong id="modelStatus">Not tested</strong></span><span><span class="card-label">Connection</span><strong id="connectionStatus">Checking</strong></span></div>
+          <p id="diagnosticMessage" class="helper"></p>
+        </div>
+        <p class="onboarding">First time on this Mac? Install Codex CLI, run <code>codex login</code> in Terminal, finish ChatGPT sign-in, then click Refresh. CheatyKitty never reads or displays auth secrets.</p>
+      </section>
+
+      <section class="settings-section model-section">
+        <span class="eyebrow">Model</span>
+        <fieldset id="modelSelector" class="model-selector" role="radiogroup" aria-labelledby="modelSelectorLegend">
+          <legend id="modelSelectorLegend">Choose one model and reasoning profile</legend>
+          <div class="model-options">
+            <label class="model-option"><input type="radio" name="modelMode" value="gpt-5.6-luna" aria-label="Default — 5.6 Luna · Medium" checked /><span><strong>Default — 5.6 Luna</strong><small>Medium · recommended</small></span></label>
+            <label class="model-option"><input type="radio" name="modelMode" value="gpt-5.6-sol" aria-label="5.6 Sol · Medium" /><span><strong>5.6 Sol</strong><small>Medium</small></span></label>
+            <label class="model-option"><input type="radio" name="modelMode" value="gpt-5.3-codex-spark" aria-label="5.3 Codex Spark · Medium" /><span><strong>5.3 Codex Spark</strong><small>Medium</small></span></label>
+          </div>
+        </fieldset>
+      </section>
+
+      <section class="settings-section compact-settings">
+        <span class="eyebrow">Capture trigger</span><h2>Choose one mode</h2>
+        <div class="mode-selector" role="radiogroup" aria-label="Capture trigger mode">
+          <label class="mode-option"><input type="radio" name="interactionMode" value="manual" checked /><span><strong>Manual</strong><small>Use your global shortcut</small></span></label>
+          <label class="mode-option"><input type="radio" name="interactionMode" value="auto" /><span><strong>Auto</strong><small>Runs only when the previous capture is done</small></span></label>
+        </div>
+        <div id="autoIntervalField" class="field-group range-field inactive" aria-disabled="true"><div class="range-label"><label for="autoInterval">Auto interval</label><output id="autoIntervalValue" for="autoInterval">5 s</output></div><input id="autoInterval" type="range" min="3" max="15" step="1" value="5" disabled /><p class="helper">First capture starts after this interval. Changing it safely resets the Auto timer.</p></div>
+        <div id="shortcutField" class="field-group"><label for="shortcutRecorder">Manual global shortcut</label><div class="shortcut-row"><button id="shortcutRecorder" class="shortcut-recorder" type="button" aria-describedby="shortcutHelp shortcutValidation">Record shortcut</button><button id="retryShortcut" class="secondary" type="button">Retry</button></div><p id="shortcutHelp" class="helper">Click, then press one modifier plus one key. Escape cancels recording.</p><p id="shortcutValidation" class="helper" aria-live="polite"></p></div>
+        <fieldset class="layout-selector"><legend>Result display</legend><div class="mode-selector" role="radiogroup" aria-label="Result display layout"><label class="mode-option"><input type="radio" name="resultLayout" value="question-answer" checked /><span><strong>Question + Answer</strong><small>Show both columns</small></span></label><label class="mode-option"><input type="radio" name="resultLayout" value="answer-only" /><span><strong>Answer only</strong><small>Use the full width for the answer</small></span></label></div></fieldset>
+        <div class="settings-grid"><div class="field-group"><label for="timeout">Timeout</label><div class="input-suffix"><input id="timeout" type="number" min="15" max="300" step="5" /><span>SEC</span></div></div><div class="field-group"><label for="captureMode">Capture</label><select id="captureMode"><option value="display">Current display</option><option value="area">Select area</option></select></div></div>
+        <div class="field-group opacity-field"><div class="range-label"><label for="overlayOpacity">Main overlay opacity</label><output id="opacityValue">100%</output></div><input id="overlayOpacity" type="range" min="25" max="100" step="1" value="100" /><p class="helper">Live preview affects only main; Settings stays opaque. Screenshots remain temporary.</p></div>
+      </section>
+    </div>
+    <footer class="settings-footer"><p id="saveDiagnostic" class="diagnostic" aria-live="polite"></p><button id="saveButton" class="primary">Save settings</button></footer>
+  </main>
+  <script src="settings-actions.js"></script>
+  <script src="shortcut-recorder-policy.js"></script>
+  <script src="settings-renderer.js"></script>
+</body>
+</html>

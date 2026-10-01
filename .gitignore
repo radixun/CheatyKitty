@@ -1,0 +1,42 @@
+# Dependencies
+/node_modules/
+
+# Reproducible build and test output
+/artifacts/
+/build/
+/coverage/
+/dist/
+/release/
+
+# Sensitive or local-only evidence
+/.agent-work/
+/captures/
+/evidence/
+/fixtures/private/
+/proof/
+/recordings/
+/screenshots/
+/signing/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.key
+*.mobileprovision
+*.p12
+*.pem
+
+# Logs and package-manager noise
+*.log
+npm-debug.log*
+
+# Release files belong in GitHub Releases, not source history
+*.blockmap
+*.dmg
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+/.idea/
+/.vscode/

@@ -1,0 +1,42 @@
+name: Bug report
+description: Report a reproducible CheatyKitty problem with synthetic data.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach real assessment content, credentials, screenshots, OCR output, or private logs.
+  - type: input
+    id: version
+    attributes:
+      label: Version or revision
+      placeholder: 1.0.0 or a commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: macOS and hardware
+      placeholder: macOS 14.6, Apple M2
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe what happened and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction with synthetic data
+      description: Give the smallest safe sequence that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Checks already performed
+      placeholder: npm test, npm run typecheck, or manual checks

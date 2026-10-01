@@ -1,0 +1,110 @@
+{
+  "name": "cheatykitty",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Privacy-conscious macOS overlay that uses Codex CLI and Apple Vision OCR to suggest answers to visible study questions",
+  "author": "CheatyKitty contributors",
+  "main": "dist/main.js",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "keywords": [
+    "macos",
+    "apple-silicon",
+    "test-assistance",
+    "accessibility",
+    "screencapturekit",
+    "vision-ocr",
+    "codex-cli"
+  ],
+  "scripts": {
+    "clean": "rm -rf artifacts build coverage dist release",
+    "check": "npm run typecheck && npm test && npm run verify:hygiene && npm run build && npm run smoke",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "build": "node scripts/prepare-icon.mjs && node scripts/verify-icon.mjs && node scripts/prepare-build.mjs && tsc && node scripts/copy-static.mjs",
+    "start": "npm run build && electron .",
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:packaged": "node scripts/smoke.mjs --packaged",
+    "visual:capture": "npm run build && electron scripts/capture-ui.cjs busy && electron scripts/capture-ui.cjs answer-only && electron scripts/capture-ui.cjs answer-only-busy && electron scripts/capture-ui.cjs answer-only-thinking && electron scripts/capture-ui.cjs answer-only-error && electron scripts/capture-ui.cjs result && electron scripts/capture-ui.cjs settings",
+    "visual:capture:busy": "npm run build && electron scripts/capture-ui.cjs busy",
+    "visual:capture:result": "npm run build && electron scripts/capture-ui.cjs result",
+    "visual:capture:settings": "npm run build && electron scripts/capture-ui.cjs settings",
+    "visual:capture:readme": "npm run build && electron scripts/capture-ui.cjs ready && electron scripts/capture-ui.cjs demo-capturing && electron scripts/capture-ui.cjs demo-thinking && electron scripts/capture-ui.cjs demo-result && electron scripts/capture-ui.cjs settings",
+    "verify:codex": "npm run build && node scripts/integration-codex.mjs",
+    "verify:codex:preset": "npm run build && node scripts/integration-codex.mjs gpt-5.6-sol",
+    "verify:codex:spark": "npm run build && node scripts/integration-codex.mjs gpt-5.3-codex-spark medium letter && node scripts/integration-codex.mjs gpt-5.3-codex-spark medium numeric",
+    "verify:capture-proof": "node scripts/packaged-capture-proof.mjs",
+    "verify:runtime:packaged": "node scripts/packaged-runtime-e2e.mjs gpt-5.6-luna letter degraded-ocr && node scripts/packaged-runtime-e2e.mjs gpt-5.6-sol letter degraded-ocr && node scripts/packaged-runtime-e2e.mjs gpt-5.3-codex-spark letter && node scripts/packaged-runtime-e2e.mjs gpt-5.3-codex-spark numeric",
+    "verify:negative:packaged": "node scripts/packaged-negative-probes.mjs",
+    "verify:runtime:stress": "node scripts/packaged-runtime-e2e.mjs gpt-5.6-luna it-output && node scripts/packaged-runtime-e2e.mjs gpt-5.6-luna it-promises && node scripts/packaged-runtime-e2e.mjs gpt-5.6-sol it-snapshot && node scripts/packaged-runtime-e2e.mjs gpt-5.6-sol it-rust && node scripts/packaged-runtime-e2e.mjs gpt-5.3-codex-spark it-typescript && node scripts/packaged-runtime-e2e.mjs gpt-5.3-codex-spark it-sql && node scripts/packaged-runtime-e2e.mjs gpt-5.3-codex-spark it-network",
+    "release:record": "node scripts/release-record.mjs --write",
+    "release:verify": "node scripts/release-record.mjs --verify",
+    "verify:parity": "node scripts/verify-source-package-parity.mjs",
+    "verify:evidence-privacy": "node scripts/verify-runtime-evidence-privacy.mjs",
+    "verify:fresh-machine": "npm run build && node scripts/fresh-machine-smoke.mjs",
+    "verify:hygiene": "node scripts/repo-hygiene.mjs",
+    "verify:icon": "node scripts/prepare-icon.mjs && node scripts/verify-icon.mjs",
+    "prepare:electron-runtime": "node scripts/prepare-electron-runtime.mjs",
+    "dist:mac": "npm run prepare:electron-runtime && npm run build && electron-builder --mac dmg --arm64"
+  },
+  "devDependencies": {
+    "@shockpkg/icon-encoder": "^3.2.3",
+    "@types/node": "^22.20.1",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.0.0",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.0"
+  },
+  "build": {
+    "appId": "com.cheatykitty.app",
+    "productName": "CheatyKitty",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/electron/dist/LICENSE",
+        "to": "LICENSE.electron.txt"
+      },
+      {
+        "from": "node_modules/electron/dist/LICENSES.chromium.html",
+        "to": "LICENSES.chromium.html"
+      }
+    ],
+    "asarUnpack": [
+      "dist/native/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/CheatyKitty.icns",
+      "minimumSystemVersion": "14.0",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "CheatyKitty-${version}-${arch}.${ext}",
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSScreenCaptureUsageDescription": "CheatyKitty captures visible on-screen questions when you use the Manual shortcut or enable Auto capture."
+      }
+    },
+    "dmg": {
+      "sign": false,
+      "icon": "build/CheatyKitty.icns"
+    }
+  }
+}
